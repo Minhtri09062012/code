@@ -8,19 +8,22 @@ import { getLesson, getProblem, devWarnings } from '../../core/registry.ts';
 import { getExamSet } from '../../problems/sets/index.ts';
 import {
   logComponentMount,
-  isReloadDetected,
   auditInternalLinksInDOM,
 } from '../../core/devMonitor.ts';
-import { AlertCircle, AlertTriangle } from 'lucide-react';
 
 const routeIntegrity = checkRoutesIntegrity();
+if (!routeIntegrity.ok) {
+  console.warn('[Dev Audit Quy tắc 18]', routeIntegrity.errors);
+}
+if (devWarnings.length > 0) {
+  console.warn('[Dev Audit chuẩn hóa dữ liệu]', devWarnings);
+}
 
 export const RootLayout: React.FC = () => {
   const location = useLocation();
   const navType = useNavigationType();
 
   const [liveAnnouncement, setLiveAnnouncement] = useState<string>('');
-  const [domAuditErrors, setDomAuditErrors] = useState<string[]>([]);
   const scrollPositions = useRef<Record<string, number>>({});
   const lastKeyRef = useRef<string>(location.key);
 
@@ -29,15 +32,12 @@ export const RootLayout: React.FC = () => {
     logComponentMount('rootLayout');
   }, []);
 
-  // Kiểm tra liên kết DOM ở chế độ dev
+  // Kiểm tra liên kết DOM ở chế độ dev (ghi log console nếu có)
   useEffect(() => {
     const timer = setTimeout(() => {
       const audit = auditInternalLinksInDOM();
       if (!audit.ok) {
-        setDomAuditErrors(audit.violations);
         console.error('[Dev Audit Quy tắc 19] Phát hiện lỗi thẻ liên kết:', audit.violations);
-      } else {
-        setDomAuditErrors([]);
       }
     }, 500);
 
@@ -115,8 +115,6 @@ export const RootLayout: React.FC = () => {
     location.pathname.startsWith('/concept') ||
     location.pathname.startsWith('/algorithm');
 
-  const reloadDetected = isReloadDetected();
-
   return (
     <div className="relative min-h-screen flex flex-col pb-16 lg:pb-0 bg-slate-950 text-slate-100">
       {/* Vùng aria-live thông báo tên trang cho trợ năng */}
@@ -128,41 +126,7 @@ export const RootLayout: React.FC = () => {
         {liveAnnouncement}
       </div>
 
-      {/* 1. Dev banner nếu phát hiện tải lại toàn trang (Document-level Reload) */}
-      {reloadDetected && (
-        <div className="bg-rose-600 text-white text-xs px-4 py-2 font-mono text-center font-bold flex items-center justify-center gap-2 shadow-md z-50">
-          <AlertTriangle className="w-4 h-4 shrink-0" />
-          <span>
-            [Dev Audit Quy tắc 19 & 20] Phát hiện tải lại toàn trang (Document Reload)! Ứng dụng vừa bị tải lại từ máy chủ/trình duyệt thay vì Client-side Navigation.
-          </span>
-        </div>
-      )}
-
-      {/* 2. Dev banner nếu có lỗi định tuyến Quy tắc 18 */}
-      {!routeIntegrity.ok && (
-        <div className="bg-amber-600 text-white text-xs px-4 py-1.5 font-mono text-center font-bold flex items-center justify-center gap-2 z-50">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>Cảnh báo Quy tắc 18: {routeIntegrity.errors.join(' | ')}</span>
-        </div>
-      )}
-
-      {/* 3. Dev banner nếu có vi phạm thẻ liên kết <a> nội bộ */}
-      {domAuditErrors.length > 0 && (
-        <div className="bg-rose-700 text-white text-xs px-4 py-1.5 font-mono text-center font-bold flex items-center justify-center gap-2 z-50">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>Lỗi Quy tắc 19: {domAuditErrors.join(' | ')}</span>
-        </div>
-      )}
-
-      {/* Dev banner nếu có cảnh báo chuẩn hóa dữ liệu */}
-      {devWarnings.length > 0 && (
-        <div className="bg-amber-600 text-white text-xs px-4 py-1.5 font-mono text-center font-bold flex items-center justify-center gap-2 z-50">
-          <AlertTriangle className="w-4 h-4 shrink-0" />
-          <span>Cảnh báo chuẩn hóa dữ liệu: {devWarnings.join(' | ')}</span>
-        </div>
-      )}
-
-      {/* 4. Khung Header (AppHeader / Navbar) - Giữ nguyên không bị hủy khi đổi trang */}
+      {/* Khung Header (AppHeader / Navbar) - Giữ nguyên không bị hủy khi đổi trang */}
       <Navbar showSidebarToggle={isLearningRoute} />
 
       {/* 5. Vùng nội dung được bảo vệ bởi ErrorBoundary */}

@@ -21,41 +21,14 @@ export const mountCounters: MountCounters = {
 
 let unexpectedReloadDetected = false;
 
-// Khởi tạo kiểm tra tải lại trang (chỉ chạy trong môi trường trình duyệt)
+// Ghi nhận khởi tạo phiên ứng dụng (chỉ chạy trong môi trường trình duyệt)
 if (typeof window !== 'undefined') {
   const SESSION_KEY = `${EXPORT_PREFIX}_app_session_started`;
-  const hasPreviousSession = sessionStorage.getItem(SESSION_KEY) === 'true';
-
-  let navType: string | null = null;
-  if (window.performance) {
-    const navEntries = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[];
-    if (navEntries.length > 0) {
-      navType = navEntries[0].type;
-    }
-  }
-
-  // Nếu đã có session mà navType là 'reload', tức là trang bị tải lại sau khi đã chạy
-  if (hasPreviousSession && navType === 'reload') {
-    unexpectedReloadDetected = true;
-    console.warn(
-      '[Dev Monitor] PHÁT HIỆN TẢI LẠI TOÀN TRANG (DOCUMENT RELOAD)!',
-      'Loại điều hướng:',
-      navType
-    );
-  } else {
-    sessionStorage.setItem(SESSION_KEY, 'true');
-  }
-
-  // Lắng nghe sự kiện pagehide
-  window.addEventListener('pagehide', (e) => {
-    console.warn('[Dev Monitor] Sự kiện pagehide kích hoạt (trang bị dỡ bỏ hoặc reload)', {
-      persisted: e.persisted,
-    });
-  });
+  sessionStorage.setItem(SESSION_KEY, 'true');
 }
 
 /**
- * Kiểm tra xem có phát hiện tải lại toàn trang không
+ * Kiểm tra xem có phát hiện tải lại toàn trang bất thường không
  */
 export function isReloadDetected(): boolean {
   return unexpectedReloadDetected;
