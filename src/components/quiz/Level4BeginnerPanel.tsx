@@ -252,7 +252,7 @@ export const Level4BeginnerPanel: React.FC<Level4BeginnerPanelProps> = ({
             {isExplainingLine ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin text-purple-300" />
-                <span>AI đang phân tích dòng...</span>
+                <span>Đang phân tích dòng...</span>
               </>
             ) : (
               <>

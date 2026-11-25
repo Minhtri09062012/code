@@ -23,7 +23,6 @@ import {
   Keyboard,
   LogOut,
   Zap,
-  Bot,
 } from 'lucide-react';
 import { ProgressModal } from '../modals/ProgressModal.tsx';
 import { KeyboardShortcutsModal } from '../modals/KeyboardShortcutsModal.tsx';
@@ -191,7 +190,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   const isExamActive = location.pathname.startsWith('/exam');
   const isPlacementActive = location.pathname.startsWith('/placement');
   const isIdeActive = location.pathname.startsWith('/ide');
-  const isChatActive = location.pathname.startsWith('/chat');
   const isLeaderboardActive = location.pathname.startsWith('/leaderboard');
   const isErrorsActive = location.pathname.startsWith('/errors');
   const isProfileActive = location.pathname.startsWith('/profile');
@@ -324,21 +322,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <Code2 className="w-3.5 h-3.5" />
             <span>IDE Python</span>
-          </NavLink>
-
-          <NavLink
-            to={routes.chat()}
-            onClick={handleLinkClick(routes.chat())}
-            className={({ isActive }) =>
-              `flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold transition-all min-h-[44px] cursor-pointer ${
-                isActive || isChatActive
-                  ? 'bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-100 hover:bg-slate-900 border border-transparent'
-              }`
-            }
-          >
-            <Bot className="w-3.5 h-3.5" />
-            <span>Trợ lý AI</span>
           </NavLink>
 
           <NavLink

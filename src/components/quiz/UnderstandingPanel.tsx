@@ -38,7 +38,7 @@ export const UnderstandingPanel: React.FC<UnderstandingPanelProps> = ({ source }
     {
       level: 1 as const,
       title: 'Cấp 1: Hiểu đề, mơ hồ triển khai',
-      desc: 'Mô tả cách giải bằng lời/giả mã, gia sư AI chấm theo Rubric và gợi ý bậc tăng dần',
+      desc: 'Mô tả cách giải bằng lời/giả mã, hệ thống chấm theo Rubric và gợi ý bậc tăng dần',
       icon: FileCode,
       disabled: false,
     },
@@ -60,7 +60,7 @@ export const UnderstandingPanel: React.FC<UnderstandingPanelProps> = ({ source }
     {
       level: 4 as const,
       title: 'Cấp 4: Học sinh mới học',
-      desc: 'Chạy từng dòng code mẫu, 3 lớp giải thích, AI minh họa đời thường & thử thách đổi đề',
+      desc: 'Chạy từng dòng code mẫu, 3 lớp giải thích, ví dụ minh họa đời thường & thử thách đổi đề',
       icon: Sparkles,
       disabled: !hasSimulation,
       disabledReason: 'Bài tập này chưa có mô phỏng, hãy chọn Cấp 1 hoặc Cấp 3.',

@@ -16,7 +16,6 @@ import {
   FileJson,
   Keyboard,
   X,
-  Bot,
 } from 'lucide-react';
 import { routes, isPathActive } from '../../core/routes.ts';
 import { useLeaveGuardContext } from '../../context/LeaveGuardContext.tsx';
@@ -89,7 +88,6 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ isExamRunning = fals
   const isErrorsActive = location.pathname.startsWith('/errors');
   const isMoreActive =
     location.pathname.startsWith('/placement') ||
-    location.pathname.startsWith('/chat') ||
     location.pathname.startsWith('/profile') ||
     location.pathname.startsWith('/coach') ||
     location.pathname.startsWith('/import');
@@ -281,18 +279,6 @@ export const BottomTabBar: React.FC<BottomTabBarProps> = ({ isExamRunning = fals
             </div>
 
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <NavLink
-                to={routes.chat()}
-                onClick={(e) => {
-                  setShowMoreSheet(false);
-                  handleLinkClick(routes.chat())(e);
-                }}
-                className="col-span-2 p-3 rounded-2xl bg-blue-600/15 border border-blue-500/30 hover:bg-blue-600/25 flex items-center gap-2.5 text-left text-blue-200 font-semibold cursor-pointer min-h-[44px]"
-              >
-                <Bot className="w-4 h-4 text-cyan-400 shrink-0" />
-                <span>Trợ lý AI Lập trình & Thuật toán</span>
-              </NavLink>
-
               <NavLink
                 to={routes.placement()}
                 onClick={(e) => {

@@ -4,14 +4,6 @@ import path from 'path';
 import { spawn } from 'child_process';
 import dotenv from 'dotenv';
 import { appStore, UserProfile, IdeFile } from './server/store.ts';
-import {
-  isGeminiConfigured,
-  streamAiChatServer,
-  evaluateRubricServer,
-  explainCodeLineServer,
-  explainWhyFastServer,
-  diagnoseFailingTestServer,
-} from './server/ai.ts';
 
 dotenv.config();
 
@@ -527,150 +519,12 @@ app.post('/api/python/debug', (req, res) => {
   pyProcess.stdin.end();
 });
 
-// ==================== AI TUTOR & EVALUATION API (SERVER-SIDE GEMINI) ====================
-
-app.get('/api/ai/status', (req, res) => {
-  res.json({
-    configured: isGeminiConfigured(),
-    model: 'gemini-4-hydrogen',
+// Ensure unknown /api/* routes always return valid JSON
+app.use('/api', (req, res) => {
+  res.status(404).json({
+    error: 'API_NOT_FOUND',
+    message: `Không tìm thấy API: ${req.method} ${req.originalUrl}`,
   });
-});
-
-app.post('/api/ai/chat', async (req: AuthenticatedRequest, res: Response) => {
-  const { message, history, context } = req.body || {};
-
-  if (!message || typeof message !== 'string' || !message.trim()) {
-    return res.status(400).json({
-      error: 'INVALID_MESSAGE',
-      message: 'Vui lòng nhập câu hỏi trước khi gửi.',
-    });
-  }
-
-  if (!isGeminiConfigured()) {
-    return res.status(503).json({
-      error: 'MISSING_API_KEY',
-      message: 'Dịch vụ Trợ lý AI chưa được cấu hình GEMINI_API_KEY trên máy chủ.',
-    });
-  }
-
-  res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-  res.setHeader('Cache-Control', 'no-cache, no-transform');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-  res.flushHeaders?.();
-  res.write(': connected\n\n');
-
-  const controller = new AbortController();
-  res.on('close', () => {
-    if (!res.writableEnded) {
-      controller.abort();
-    }
-  });
-
-  const sendEvent = (payload: Record<string, unknown>) => {
-    if (!res.writableEnded) {
-      res.write(`data: ${JSON.stringify(payload)}\n\n`);
-    }
-  };
-
-  try {
-    await streamAiChatServer({
-      message: message.trim(),
-      history: Array.isArray(history) ? history : [],
-      context: context && typeof context === 'object' ? context : undefined,
-      signal: controller.signal,
-      onChunk: (text) => {
-        sendEvent({ text });
-      },
-    });
-
-    if (!controller.signal.aborted) {
-      sendEvent({ done: true });
-    }
-    if (!res.writableEnded) {
-      res.end();
-    }
-  } catch (err: any) {
-    if (controller.signal.aborted) {
-      if (!res.writableEnded) res.end();
-      return;
-    }
-
-    console.error('[AI Chat] Streaming error:', err?.message || err);
-    sendEvent({
-      error: 'AI_CHAT_FAILED',
-      message: err?.message?.includes('429')
-        ? 'Trợ lý AI đang nhận nhiều yêu cầu. Em đợi vài giây rồi thử lại nhé.'
-        : 'Không thể kết nối tới Trợ lý AI lúc này. Vui lòng thử lại sau.',
-    });
-    if (!res.writableEnded) {
-      res.end();
-    }
-  }
-});
-
-app.post('/api/ai/evaluate', async (req, res) => {
-  try {
-    if (!isGeminiConfigured()) {
-      return res.status(503).json({ error: 'MISSING_API_KEY' });
-    }
-    const evaluation = await evaluateRubricServer(req.body);
-    return res.json({ evaluation });
-  } catch (err: any) {
-    console.warn('[AI Evaluate] Error:', err?.message || err);
-    return res.status(502).json({
-      error: 'EVALUATE_FAILED',
-      message: err?.message || 'Lỗi đánh giá câu trả lời bằng Gemini',
-    });
-  }
-});
-
-app.post('/api/ai/explain-line', async (req, res) => {
-  try {
-    if (!isGeminiConfigured()) {
-      return res.status(503).json({ error: 'MISSING_API_KEY' });
-    }
-    const explanation = await explainCodeLineServer(req.body);
-    return res.json({ explanation });
-  } catch (err: any) {
-    console.warn('[AI Explain Line] Error:', err?.message || err);
-    return res.status(502).json({
-      error: 'EXPLAIN_LINE_FAILED',
-      message: err?.message || 'Lỗi giải thích dòng code',
-    });
-  }
-});
-
-app.post('/api/ai/explain-fast', async (req, res) => {
-  try {
-    if (!isGeminiConfigured()) {
-      return res.status(503).json({ error: 'MISSING_API_KEY' });
-    }
-    const explanation = await explainWhyFastServer(req.body);
-    return res.json({ explanation });
-  } catch (err: any) {
-    console.warn('[AI Explain Fast] Error:', err?.message || err);
-    return res.status(502).json({
-      error: 'EXPLAIN_FAST_FAILED',
-      message: err?.message || 'Lỗi phân tích độ tối ưu',
-    });
-  }
-});
-
-app.post('/api/ai/diagnose-test', async (req, res) => {
-  try {
-    if (!isGeminiConfigured()) {
-      return res.status(503).json({ error: 'MISSING_API_KEY' });
-    }
-    const diagnostic = await diagnoseFailingTestServer(req.body);
-    return res.json({ diagnostic });
-  } catch (err: any) {
-    console.warn('[AI Diagnose Test] Error:', err?.message || err);
-    return res.status(502).json({
-      error: 'DIAGNOSE_FAILED',
-      message: err?.message || 'Lỗi phân tích test sai',
-    });
-  }
 });
 
 // ==================== SERVE FRONTEND ====================

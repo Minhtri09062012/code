@@ -437,9 +437,9 @@ export const CodeRunner: React.FC<CodeRunnerProps> = ({ source, level }) => {
                 <div className="flex items-center justify-between text-xs font-bold text-blue-300">
                   <span className="flex items-center gap-1.5">
                     <Sparkles className="w-3.5 h-3.5 text-blue-400" />
-                    Chẩn đoán sư phạm & Hướng gỡ lỗi:
+                    Chẩn đoán lỗi & Hướng gỡ lỗi:
                   </span>
-                  {isDiagnosing && <span className="text-[11px] text-blue-400 animate-pulse">Gia sư AI đang phân tích...</span>}
+                  {isDiagnosing && <span className="text-[11px] text-blue-400 animate-pulse">Đang phân tích...</span>}
                 </div>
 
                 {diagnostic ? (

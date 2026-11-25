@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { safeParseJson } from '../core/safeFetch.ts';
 
 export interface UserProfile {
   id: string;
@@ -73,10 +74,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Load OAuth Config
   useEffect(() => {
     fetch('/api/auth/config')
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.googleClientId) {
-          setGoogleClientId(data.googleClientId);
+      .then((res) => safeParseJson(res))
+      .then((parsed) => {
+        if (parsed.ok && parsed.data.googleClientId) {
+          setGoogleClientId(parsed.data.googleClientId);
         }
       })
       .catch((err) => console.warn('Could not fetch auth config:', err));
@@ -99,12 +100,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (res.ok) {
-        const data = await res.json();
-        setUser(data.user);
-        if (data.files && Array.isArray(data.files)) {
-          setUserFiles(data.files);
+        const parsed = await safeParseJson(res);
+        if (parsed.ok) {
+          setUser(parsed.data.user);
+          if (parsed.data.files && Array.isArray(parsed.data.files)) {
+            setUserFiles(parsed.data.files);
+          }
         }
-      } else {
+      } else if (res.status === 401) {
         // Token expired or invalid
         localStorage.removeItem(SESSION_STORAGE_KEY);
         setToken(null);
@@ -130,7 +133,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         body: JSON.stringify({ idToken, accessToken }),
       });
 
-      const data = await res.json();
+      const parsed = await safeParseJson(res);
+      if (!parsed.ok) {
+        return {
+          success: false,
+          error: 'SERVER_UNAVAILABLE',
+          message: parsed.message,
+        };
+      }
+      const data = parsed.data;
 
       if (!res.ok) {
         return {
@@ -176,7 +187,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         body: JSON.stringify(data),
       });
 
-      const resData = await res.json();
+      const parsed = await safeParseJson(res);
+      if (!parsed.ok) {
+        return {
+          success: false,
+          error: 'SERVER_UNAVAILABLE',
+          message: parsed.message,
+        };
+      }
+      const resData = parsed.data;
       if (!res.ok) {
         return {
           success: false,
@@ -220,7 +239,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         body: JSON.stringify({ idToken }),
       });
 
-      const data = await res.json();
+      const parsed = await safeParseJson(res);
+      if (!parsed.ok) {
+        return { success: false, message: parsed.message };
+      }
+      const data = parsed.data;
       if (!res.ok) {
         return { success: false, message: data.message || 'Liên kết thất bại' };
       }
@@ -264,10 +287,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.user) {
-          setUser(data.user);
-          return data.addedXp;
+        const parsed = await safeParseJson(res);
+        if (parsed.ok && parsed.data.success && parsed.data.user) {
+          setUser(parsed.data.user);
+          return parsed.data.addedXp;
         }
       }
     } catch (e) {

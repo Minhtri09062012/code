@@ -15,7 +15,10 @@ import {
   DebuggerMode,
   CallStackFrame,
   VariableItem,
+  VariableChange,
 } from '../../ide/debuggerTypes.ts';
+import { safeParseJson } from '../../core/safeFetch.ts';
+import { runPythonTest, runPythonTrace } from '../../runner/pyRunner.ts';
 import {
   Play,
   Bug,
@@ -245,6 +248,30 @@ print("Các số đẹp tìm thấy:", ket_qua)
     );
   };
 
+  // Helper: Suy luận kiểu biến cho Pyodide debugger fallback
+  const toVariableItem = (name: string, rawVal: unknown): VariableItem => {
+    const str = String(rawVal ?? '');
+    if (str === 'True' || str === 'False') {
+      return { name, value: str, type: 'bool', category: 'boolean' };
+    }
+    if (str === 'None') {
+      return { name, value: str, type: 'NoneType', category: 'none' };
+    }
+    if (str.startsWith('[') || str.startsWith('(')) {
+      return { name, value: str, type: str.startsWith('(') ? 'tuple' : 'list', category: 'list' };
+    }
+    if (str.startsWith('{')) {
+      return { name, value: str, type: 'dict', category: 'dict' };
+    }
+    if ((str.startsWith("'") && str.endsWith("'")) || (str.startsWith('"') && str.endsWith('"'))) {
+      return { name, value: str, type: 'str', category: 'string' };
+    }
+    if (/^-?\d+(\.\d+)?$/.test(str)) {
+      return { name, value: str, type: str.includes('.') ? 'float' : 'int', category: 'number' };
+    }
+    return { name, value: str, type: 'object', category: 'other' };
+  };
+
   // ================= RUN WITHOUT DEBUGGER =================
   const handleRun = async () => {
     if (!activeFile) return;
@@ -254,6 +281,8 @@ print("Các số đẹp tìm thấy:", ket_qua)
     setErrorMessage(null);
 
     const startTime = Date.now();
+    let apiData: any = null;
+
     try {
       const res = await fetch('/api/python/run', {
         method: 'POST',
@@ -264,29 +293,62 @@ print("Các số đẹp tìm thấy:", ket_qua)
           timeLimitSec: 4,
         }),
       });
+      const parsed = await safeParseJson(res);
+      if (parsed.ok) {
+        apiData = parsed.data;
+      }
+    } catch {
+      // Sẽ tự động chuyển sang trình chạy Python trực tiếp trên trình duyệt (Pyodide)
+    }
 
-      const data = await res.json();
-      const elapsed = data.elapsedMs || Date.now() - startTime;
+    if (apiData) {
+      const elapsed = apiData.elapsedMs || Date.now() - startTime;
       setExecutionTime(elapsed);
 
-      if (data.status === 'timeout') {
+      if (apiData.status === 'timeout') {
         setTerminalOutput((prev) => prev + `\n❌ [TIMEOUT]: Quá thời gian thực thi (4s).\n`);
         setErrorMessage('Timeout Error: Vòng lặp vô hạn hoặc tính toán quá lâu.');
         setDebuggerMode('error');
-      } else if (data.status === 'ok') {
-        setTerminalOutput(data.stdout || '[Chương trình kết thúc không có đầu ra]');
+      } else if (apiData.status === 'ok') {
+        setTerminalOutput(apiData.stdout || '[Chương trình kết thúc không có đầu ra]');
         setDebuggerMode('finished');
-        // Award XP for successful run
         if (user) {
           awardXp('ide_run_debug', activeFile.id);
         }
       } else {
-        setTerminalOutput(data.stdout || '');
-        setErrorMessage(data.error || 'Runtime Error');
+        setTerminalOutput(apiData.stdout || '');
+        setErrorMessage(apiData.error || 'Runtime Error');
+        setDebuggerMode('error');
+      }
+      return;
+    }
+
+    // Fallback: Chạy trực tiếp trên trình duyệt bằng Pyodide Web Worker
+    setTerminalOutput('Đang khởi tạo và chạy Python trực tiếp trên trình duyệt (Pyodide)...\n');
+    try {
+      const pyRes = await runPythonTest(activeFile.content, stdinInput, { kind: 'stdio' }, 6);
+      setExecutionTime(pyRes.elapsedMs || Date.now() - startTime);
+
+      if (pyRes.status === 'ok') {
+        setTerminalOutput(pyRes.output || '[Chương trình kết thúc không có đầu ra]');
+        setDebuggerMode('finished');
+        if (user) {
+          awardXp('ide_run_debug', activeFile.id);
+        }
+      } else if (pyRes.status === 'timeout') {
+        setTerminalOutput((prev) => prev + `\n❌ [TIMEOUT]: Quá thời gian thực thi.\n`);
+        setErrorMessage(pyRes.error?.message || 'Timeout Error: Vòng lặp vô hạn hoặc tính toán quá lâu.');
+        setDebuggerMode('error');
+      } else {
+        const errText = pyRes.error?.message || 'Không thể thực thi mã Python.';
+        setTerminalOutput(`❌ ${errText}`);
+        setErrorMessage(errText);
         setDebuggerMode('error');
       }
     } catch (err: any) {
-      setTerminalOutput(`❌ Lỗi kết nối máy chủ: ${err?.message}`);
+      const msg = err?.message || 'Không thể kết nối tới trình chạy Python.';
+      setTerminalOutput(`❌ ${msg}`);
+      setErrorMessage(msg);
       setDebuggerMode('error');
     }
   };
@@ -300,6 +362,9 @@ print("Các số đẹp tìm thấy:", ket_qua)
     setErrorMessage(null);
     setIsPlaying(false);
 
+    const startTime = Date.now();
+    let apiData: any = null;
+
     try {
       const res = await fetch('/api/python/debug', {
         method: 'POST',
@@ -310,39 +375,122 @@ print("Các số đẹp tìm thấy:", ket_qua)
           maxSteps: 1500,
         }),
       });
+      const parsed = await safeParseJson(res);
+      if (parsed.ok) {
+        apiData = parsed.data;
+      }
+    } catch {
+      // Tự động chuyển sang Pyodide Debugger trên trình duyệt
+    }
 
-      const data = await res.json();
-      setExecutionTime(data.elapsedMs || 0);
+    if (apiData) {
+      setExecutionTime(apiData.elapsedMs || 0);
 
-      if (!data.success && data.status === 'timeout') {
+      if (!apiData.success && apiData.status === 'timeout') {
         setErrorMessage('Debugger Timeout: Quá thời gian theo dõi.');
         setDebuggerMode('error');
         return;
       }
 
-      if (data.steps && data.steps.length > 0) {
-        setDebugSteps(data.steps);
+      if (apiData.steps && apiData.steps.length > 0) {
+        setDebugSteps(apiData.steps);
         setCurrentStepIndex(0);
         setDebuggerMode('paused');
-        setTerminalOutput(data.steps[0].stdout || '');
+        setTerminalOutput(apiData.steps[0].stdout || '');
 
-        if (data.runtimeError) {
-          setErrorMessage(data.runtimeError);
+        if (apiData.runtimeError) {
+          setErrorMessage(apiData.runtimeError);
         }
 
-        // Award XP for successful debug trace
         if (user) {
           awardXp('ide_debug_session', activeFile.id);
         }
       } else {
-        setTerminalOutput(data.finalOutput || '');
-        if (data.runtimeError) {
-          setErrorMessage(data.runtimeError);
+        setTerminalOutput(apiData.finalOutput || '');
+        if (apiData.runtimeError) {
+          setErrorMessage(apiData.runtimeError);
+        }
+        setDebuggerMode('finished');
+      }
+      return;
+    }
+
+    // Fallback: Chạy sys.settrace trong Pyodide Web Worker
+    setTerminalOutput('Đang thu thập dữ liệu gỡ lỗi qua Pyodide trên trình duyệt...\n');
+    try {
+      const traceRes = await runPythonTrace(activeFile.content, stdinInput, 1500, 6);
+      setExecutionTime(Date.now() - startTime);
+
+      if (traceRes.status === 'timeout') {
+        setErrorMessage('Debugger Timeout: Quá thời gian theo dõi.');
+        setDebuggerMode('error');
+        return;
+      }
+
+      if (traceRes.status === 'cdn_error') {
+        const msg = traceRes.error?.message || 'Không thể khởi tạo Python Debugger.';
+        setErrorMessage(msg);
+        setTerminalOutput(`❌ ${msg}`);
+        setDebuggerMode('error');
+        return;
+      }
+
+      if (traceRes.steps && traceRes.steps.length > 0) {
+        let prevLocals: Record<string, VariableItem> = {};
+        const convertedSteps: DebugStep[] = traceRes.steps.map((s, idx) => {
+          const locals: Record<string, VariableItem> = {};
+          const changedVars: Record<string, VariableChange> = {};
+
+          for (const [k, v] of Object.entries(s.vars || {})) {
+            const item = toVariableItem(k, v);
+            locals[k] = item;
+            if (!prevLocals[k] || prevLocals[k].value !== item.value) {
+              changedVars[k] = {
+                name: k,
+                before: prevLocals[k]?.value ?? null,
+                after: item.value,
+                type: item.type,
+                category: item.category,
+              };
+            }
+          }
+          prevLocals = locals;
+
+          return {
+            step: idx + 1,
+            line: s.line,
+            func: '<module>',
+            event: 'line',
+            locals,
+            globals: locals,
+            callStack: [{ func: '<module>', line: s.line, file: activeFile.name }],
+            changedVars,
+            stdout: s.output ?? (idx === traceRes.steps.length - 1 ? traceRes.finalOutput : ''),
+          };
+        });
+
+        setDebugSteps(convertedSteps);
+        setCurrentStepIndex(0);
+        setDebuggerMode('paused');
+        setTerminalOutput(convertedSteps[0].stdout || '');
+
+        if (traceRes.error) {
+          setErrorMessage(traceRes.error.message);
+        }
+
+        if (user) {
+          awardXp('ide_debug_session', activeFile.id);
+        }
+      } else {
+        setTerminalOutput(traceRes.finalOutput || '');
+        if (traceRes.error) {
+          setErrorMessage(traceRes.error.message);
         }
         setDebuggerMode('finished');
       }
     } catch (err: any) {
-      setErrorMessage(`Lỗi debugger: ${err?.message}`);
+      const msg = err?.message || 'Không thể chạy Python Debugger.';
+      setErrorMessage(`Lỗi debugger: ${msg}`);
       setDebuggerMode('error');
     }
   };

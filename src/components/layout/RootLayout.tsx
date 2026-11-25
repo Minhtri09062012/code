@@ -3,7 +3,6 @@ import { Outlet, useLocation, useNavigationType } from 'react-router-dom';
 import { Navbar } from './Navbar.tsx';
 import { BottomTabBar } from './BottomTabBar.tsx';
 import { ErrorBoundary } from './ErrorBoundary.tsx';
-import { AiChatWidget } from '../chat/AiChatWidget.tsx';
 import { getPageTitle, checkRoutesIntegrity } from '../../core/routes.ts';
 import { getLesson, getProblem, devWarnings } from '../../core/registry.ts';
 import { getExamSet } from '../../problems/sets/index.ts';
@@ -175,9 +174,6 @@ export const RootLayout: React.FC = () => {
 
       {/* 6. Thanh điều hướng tab bar dưới đáy cho thiết bị di động */}
       <BottomTabBar />
-
-      {/* 7. Trợ lý AI nổi nhanh trên mọi trang học tập */}
-      <AiChatWidget />
     </div>
   );
 };

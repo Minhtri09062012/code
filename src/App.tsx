@@ -17,7 +17,6 @@ import { CoachPage } from './components/pages/CoachPage.tsx';
 import { ImportProblemPage } from './components/pages/ImportProblemPage.tsx';
 import { LeaderboardPage } from './components/pages/LeaderboardPage.tsx';
 import { IdePage } from './components/pages/IdePage.tsx';
-import { ChatPage } from './components/pages/ChatPage.tsx';
 import { NotFoundPage } from './components/pages/NotFoundPage.tsx';
 import { GoogleLoginModal } from './components/auth/GoogleLoginModal.tsx';
 import { getLessons } from './core/registry.ts';
@@ -66,9 +65,6 @@ export default function App() {
 
                 {/* 5. IDE Python Độc Lập Chuyên Nghiệp */}
                 <Route path="ide" element={<IdePage />} />
-
-                {/* 5b. Trợ lý AI Lập trình & Thuật toán */}
-                <Route path="chat" element={<ChatPage />} />
 
                 {/* 6. Bảng Xếp Hạng Toàn Hệ Thống */}
                 <Route path="leaderboard" element={<LeaderboardPage />} />

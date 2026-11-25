@@ -211,11 +211,6 @@ export const Level1ConceptPanel: React.FC<Level1ConceptPanelProps> = ({
             <FileCode className="w-4 h-4 text-blue-400" />
             Em hãy tả cách giải bài toán này bằng lời hoặc giả mã:
           </label>
-          {isFallbackMode && (
-            <span className="text-[11px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 border border-amber-500/30 font-medium">
-              Chế độ không AI (So khớp từ khóa)
-            </span>
-          )}
         </div>
 
         <textarea
@@ -250,24 +245,24 @@ export const Level1ConceptPanel: React.FC<Level1ConceptPanelProps> = ({
             {isLoading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>AI đang phân tích...</span>
+                <span>Đang kiểm tra...</span>
               </>
             ) : (
               <>
                 <Send className="w-4 h-4" />
-                <span>Gửi cho AI đánh giá</span>
+                <span>Gửi kiểm tra ý tưởng</span>
               </>
             )}
           </button>
         </div>
       </div>
 
-      {/* 4. Kết quả phản hồi từ AI / Fallback */}
+      {/* 4. Kết quả phản hồi đánh giá Rubric */}
       {evaluation && (
         <div className="p-4 sm:p-5 rounded-2xl bg-slate-900/70 border border-slate-800 space-y-4">
           <div className="flex items-center gap-2 text-xs font-bold text-blue-400 pb-2 border-b border-slate-800">
             <Sparkles className="w-4 h-4 text-amber-400" />
-            Nhận xét từ gia sư AI (Gemini 2.5 Flash):
+            Nhận xét & Gợi ý theo tiêu chí bài học:
           </div>
 
           {/* Lời khen ý đúng */}

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { useApp } from '../../context/AppContext.tsx';
+import { safeParseJson } from '../../core/safeFetch.ts';
 import {
   Trophy,
   Flame,
@@ -97,15 +98,18 @@ export const LeaderboardPage: React.FC = () => {
       });
 
       if (res.ok) {
-        const data = await res.json();
-        setLeaderboardData({
-          users: data.users || [],
-          totalUsers: data.totalUsers || 0,
-          totalRealUsers: data.totalRealUsers || 0,
-          totalBots: data.totalBots || 0,
-          totalPages: data.totalPages || 1,
-          currentUserRank: data.currentUserRank || null,
-        });
+        const parsed = await safeParseJson(res);
+        if (parsed.ok) {
+          const data = parsed.data;
+          setLeaderboardData({
+            users: data.users || [],
+            totalUsers: data.totalUsers || 0,
+            totalRealUsers: data.totalRealUsers || 0,
+            totalBots: data.totalBots || 0,
+            totalPages: data.totalPages || 1,
+            currentUserRank: data.currentUserRank || null,
+          });
+        }
       }
     } catch (err) {
       console.warn('Failed to load leaderboard data:', err);
@@ -152,11 +156,13 @@ export const LeaderboardPage: React.FC = () => {
     }
     try {
       const res = await fetch('/api/leaderboard/clear-bots', { method: 'POST' });
-      const data = await res.json();
-      setActionMessage(data.message || 'Đã dọn sạch các bot mô phỏng!');
-      setBotFilter('real_only');
-      fetchLeaderboard();
-      setTimeout(() => setActionMessage(null), 4000);
+      const parsed = await safeParseJson(res);
+      if (parsed.ok) {
+        setActionMessage(parsed.data.message || 'Đã dọn sạch các bot mô phỏng!');
+        setBotFilter('real_only');
+        fetchLeaderboard();
+        setTimeout(() => setActionMessage(null), 4000);
+      }
     } catch (e) {
       console.error(e);
     }
@@ -166,10 +172,12 @@ export const LeaderboardPage: React.FC = () => {
   const handleRestoreBots = async () => {
     try {
       const res = await fetch('/api/leaderboard/restore-bots', { method: 'POST' });
-      const data = await res.json();
-      setActionMessage(data.message || 'Đã nạp lại bot đối chuẩn HSG!');
-      fetchLeaderboard();
-      setTimeout(() => setActionMessage(null), 4000);
+      const parsed = await safeParseJson(res);
+      if (parsed.ok) {
+        setActionMessage(parsed.data.message || 'Đã nạp lại bot đối chuẩn HSG!');
+        fetchLeaderboard();
+        setTimeout(() => setActionMessage(null), 4000);
+      }
     } catch (e) {
       console.error(e);
     }
