@@ -16,6 +16,7 @@ async function initPyodide() {
   }
 
   isLoading = true;
+  loadError = null;
   try {
     importScripts("https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js");
     // @ts-ignore
@@ -53,6 +54,7 @@ self.onmessage = async (e) => {
   if (type === "EXEC_TEST") {
     try {
       const py = await initPyodide();
+      self.postMessage({ id, type: "EXEC_STARTED" });
       const { code, input, ioMode, maxOutputLen = 50000 } = payload;
 
       // Chuẩn bị biến trong Python
@@ -67,7 +69,27 @@ self.onmessage = async (e) => {
         py.globals.set("__output_file__", ioMode.outputFile);
 
         runnerPython = \`
-import sys, io, os
+import sys, io, os, json, traceback
+
+def _format_user_error(e, filename='solution.py'):
+    if isinstance(e, SyntaxError):
+        lines = [f'  File "{filename}", line {e.lineno or 1}']
+        if e.text:
+            txt = e.text.rstrip('\\r\\n')
+            lines.append(f'    {txt}')
+            if e.offset and e.offset > 0:
+                lines.append('    ' + (' ' * (e.offset - 1)) + '^')
+        lines.append(f'{type(e).__name__}: {e.msg}')
+        return '\\n'.join(lines)
+    tb_list = traceback.extract_tb(e.__traceback__)
+    user_frames = [f for f in tb_list if f.filename in ('solution.py', '<stdin>', '<user_code>')]
+    lines = []
+    for f in user_frames:
+        lines.append(f'  File "{f.filename}", line {f.lineno}, in {f.name}')
+        if f.line:
+            lines.append(f'    {f.line}')
+    lines.append(f'{type(e).__name__}: {str(e)}')
+    return '\\n'.join(lines)
 
 # Ghi input vào virtual file
 with open(__input_file__, 'w', encoding='utf-8') as f:
@@ -89,27 +111,50 @@ _clean_globals = {
     '__file__': 'solution.py'
 }
 
+_err_msg = None
+_result_out = ''
 try:
     _code_obj = compile(__user_code__, 'solution.py', 'exec')
     exec(_code_obj, _clean_globals)
-except Exception as e:
-    raise e
+    if not os.path.exists(__output_file__):
+        raise FileNotFoundError(f"Không tìm thấy tệp đầu ra '{__output_file__}'. Hãy đảm bảo code ghi kết quả vào đúng tên tệp quy định.")
+    with open(__output_file__, 'r', encoding='utf-8') as f:
+        _result_out = f.read()
+    if len(_result_out) > __max_output_len__:
+        _result_out = _result_out[:__max_output_len__] + "\\n... [Đầu ra bị cắt bớt do quá dài]"
+except BaseException as e:
+    _err_msg = _format_user_error(e, 'solution.py')
 
-if not os.path.exists(__output_file__):
-    raise FileNotFoundError(f"Không tìm thấy tệp đầu ra '{__output_file__}'. Hãy đảm bảo code ghi kết quả vào đúng tên tệp quy định.")
-
-with open(__output_file__, 'r', encoding='utf-8') as f:
-    _result_out = f.read()
-
-if len(_result_out) > __max_output_len__:
-    _result_out = _result_out[:__max_output_len__] + "\\n... [Đầu ra bị cắt bớt do quá dài]"
-
-_result_out
+json.dumps({
+    "ok": _err_msg is None,
+    "output": _result_out,
+    "error": _err_msg
+}, ensure_ascii=False)
 \`;
       } else {
         // stdio mode
         runnerPython = \`
-import sys, io, builtins
+import sys, io, builtins, json, traceback
+
+def _format_user_error(e, filename='<stdin>'):
+    if isinstance(e, SyntaxError):
+        lines = [f'  File "{filename}", line {e.lineno or 1}']
+        if e.text:
+            txt = e.text.rstrip('\\r\\n')
+            lines.append(f'    {txt}')
+            if e.offset and e.offset > 0:
+                lines.append('    ' + (' ' * (e.offset - 1)) + '^')
+        lines.append(f'{type(e).__name__}: {e.msg}')
+        return '\\n'.join(lines)
+    tb_list = traceback.extract_tb(e.__traceback__)
+    user_frames = [f for f in tb_list if f.filename in ('solution.py', '<stdin>', '<user_code>')]
+    lines = []
+    for f in user_frames:
+        lines.append(f'  File "{f.filename}", line {f.lineno}, in {f.name}')
+        if f.line:
+            lines.append(f'    {f.line}')
+    lines.append(f'{type(e).__name__}: {str(e)}')
+    return '\\n'.join(lines)
 
 _in_stream = io.StringIO(__test_input__)
 def _mock_input(prompt=''):
@@ -129,23 +174,40 @@ _clean_globals = {
     '__file__': '<stdin>'
 }
 
-_code_obj = compile(__user_code__, '<stdin>', 'exec')
-exec(_code_obj, _clean_globals)
+_err_msg = None
+_result_out = ''
+try:
+    _code_obj = compile(__user_code__, '<stdin>', 'exec')
+    exec(_code_obj, _clean_globals)
+    _result_out = _out_stream.getvalue()
+    if len(_result_out) > __max_output_len__:
+        _result_out = _result_out[:__max_output_len__] + "\\n... [Đầu ra bị cắt bớt do quá dài]"
+except BaseException as e:
+    _err_msg = _format_user_error(e, '<stdin>')
 
-_result_out = _out_stream.getvalue()
-if len(_result_out) > __max_output_len__:
-    _result_out = _result_out[:__max_output_len__] + "\\n... [Đầu ra bị cắt bớt do quá dài]"
-
-_result_out
+json.dumps({
+    "ok": _err_msg is None,
+    "output": _result_out,
+    "error": _err_msg
+}, ensure_ascii=False)
 \`;
       }
 
-      const rawResult = py.runPython(runnerPython);
-      self.postMessage({
-        id,
-        type: "EXEC_TEST_OK",
-        output: String(rawResult !== undefined ? rawResult : ""),
-      });
+      const rawJson = py.runPython(runnerPython);
+      const parsed = JSON.parse(String(rawJson || '{}'));
+      if (parsed.ok) {
+        self.postMessage({
+          id,
+          type: "EXEC_TEST_OK",
+          output: String(parsed.output !== undefined ? parsed.output : ""),
+        });
+      } else {
+        self.postMessage({
+          id,
+          type: "EXEC_TEST_ERROR",
+          error: String(parsed.error || "Lỗi thực thi Python"),
+        });
+      }
     } catch (err) {
       self.postMessage({
         id,
@@ -159,6 +221,7 @@ _result_out
   if (type === "EXEC_TRACE") {
     try {
       const py = await initPyodide();
+      self.postMessage({ id, type: "EXEC_STARTED" });
       const { code, input, maxSteps = 500 } = payload;
 
       py.globals.set("__test_input__", input || "");
@@ -166,7 +229,27 @@ _result_out
       py.globals.set("__max_steps__", maxSteps);
 
       const tracePython = \`
-import sys, io, builtins, json
+import sys, io, builtins, json, traceback
+
+def _format_user_error(e, filename='<user_code>'):
+    if isinstance(e, SyntaxError):
+        lines = [f'  File "{filename}", line {e.lineno or 1}']
+        if e.text:
+            txt = e.text.rstrip('\\r\\n')
+            lines.append(f'    {txt}')
+            if e.offset and e.offset > 0:
+                lines.append('    ' + (' ' * (e.offset - 1)) + '^')
+        lines.append(f'{type(e).__name__}: {e.msg}')
+        return '\\n'.join(lines)
+    tb_list = traceback.extract_tb(e.__traceback__)
+    user_frames = [f for f in tb_list if f.filename in ('solution.py', '<stdin>', '<user_code>')]
+    lines = []
+    for f in user_frames:
+        lines.append(f'  File "{f.filename}", line {f.lineno}, in {f.name}')
+        if f.line:
+            lines.append(f'    {f.line}')
+    lines.append(f'{type(e).__name__}: {str(e)}')
+    return '\\n'.join(lines)
 
 _in_stream = io.StringIO(__test_input__)
 def _mock_input(prompt=''):
@@ -238,8 +321,8 @@ _runtime_error = None
 try:
     _code_obj = compile(__user_code__, '<user_code>', 'exec')
     exec(_code_obj, {'__name__': '__main__'})
-except Exception as e:
-    _runtime_error = f"{type(e).__name__}: {str(e)}"
+except BaseException as e:
+    _runtime_error = _format_user_error(e, '<user_code>')
 finally:
     sys.settrace(None)
 

@@ -381,10 +381,29 @@ app.post('/api/python/run', (req, res) => {
 
   const startTime = Date.now();
   const pyProcess = spawn('python3', ['-c', `
-import sys, io
+import sys, io, traceback
+
+def _format_user_error(e):
+    if isinstance(e, SyntaxError):
+        lines = [f'  File "<user_code>", line {e.lineno or 1}']
+        if e.text:
+            txt = e.text.rstrip('\\r\\n')
+            lines.append(f'    {txt}')
+            if e.offset and e.offset > 0:
+                lines.append('    ' + (' ' * (e.offset - 1)) + '^')
+        lines.append(f'{type(e).__name__}: {e.msg}')
+        return '\\n'.join(lines)
+    tb_list = traceback.extract_tb(e.__traceback__)
+    user_frames = [f for f in tb_list if f.filename == '<user_code>']
+    lines = []
+    for f in user_frames:
+        lines.append(f'  File "{f.filename}", line {f.lineno}, in {f.name}')
+        if f.line:
+            lines.append(f'    {f.line}')
+    lines.append(f'{type(e).__name__}: {str(e)}')
+    return '\\n'.join(lines)
 
 code_str = sys.stdin.read()
-# Split by marker
 parts = code_str.split('---STDIN_DELIMITER---')
 user_code = parts[0]
 user_input = parts[1] if len(parts) > 1 else ''
@@ -395,13 +414,20 @@ sys.stdout = out
 sys.stderr = out
 
 clean_globals = {'__name__': '__main__'}
+has_error = False
+err_text = ''
 try:
     exec(compile(user_code, '<user_code>', 'exec'), clean_globals)
-except Exception as e:
-    sys.stderr.write(f"{type(e).__name__}: {str(e)}")
+except BaseException as e:
+    has_error = True
+    err_text = _format_user_error(e)
 finally:
     sys.stdout = sys.__stdout__
+    sys.stderr = sys.__stderr__
     sys.stdout.write(out.getvalue())
+    if has_error:
+        sys.stderr.write(err_text)
+        sys.exit(1)
 `]);
 
   let stdoutData = '';

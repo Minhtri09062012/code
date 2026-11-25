@@ -2,6 +2,27 @@ import sys
 import io
 import json
 import time
+import traceback
+
+def format_user_error(e):
+    if isinstance(e, SyntaxError):
+        lines = [f'  File "<user_code>", line {e.lineno or 1}']
+        if e.text:
+            txt = e.text.rstrip('\r\n')
+            lines.append(f'    {txt}')
+            if e.offset and e.offset > 0:
+                lines.append('    ' + (' ' * (e.offset - 1)) + '^')
+        lines.append(f'{type(e).__name__}: {e.msg}')
+        return '\n'.join(lines)
+    tb_list = traceback.extract_tb(e.__traceback__)
+    user_frames = [f for f in tb_list if f.filename == '<user_code>']
+    lines = []
+    for f in user_frames:
+        lines.append(f'  File "{f.filename}", line {f.lineno}, in {f.name}')
+        if f.line:
+            lines.append(f'    {f.line}')
+    lines.append(f'{type(e).__name__}: {str(e)}')
+    return '\n'.join(lines)
 
 def classify_variable(name, val):
     t_name = type(val).__name__
@@ -170,8 +191,8 @@ def main():
         }
         sys.settrace(trace_callback)
         exec(compiled_code, clean_globals)
-    except Exception as e:
-        runtime_error = f"{type(e).__name__}: {str(e)}"
+    except BaseException as e:
+        runtime_error = format_user_error(e)
     finally:
         sys.settrace(None)
         sys.stdout = original_stdout

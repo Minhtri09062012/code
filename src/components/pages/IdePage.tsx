@@ -19,6 +19,7 @@ import {
 } from '../../ide/debuggerTypes.ts';
 import { safeParseJson } from '../../core/safeFetch.ts';
 import { runPythonTest, runPythonTrace } from '../../runner/pyRunner.ts';
+import { translatePythonError } from '../../runner/errorTranslator.ts';
 import {
   Play,
   Bug,
@@ -317,7 +318,8 @@ print("Các số đẹp tìm thấy:", ket_qua)
         }
       } else {
         setTerminalOutput(apiData.stdout || '');
-        setErrorMessage(apiData.error || 'Runtime Error');
+        const rawErr = apiData.error || 'Runtime Error';
+        setErrorMessage(translatePythonError(rawErr).message);
         setDebuggerMode('error');
       }
       return;
@@ -336,18 +338,18 @@ print("Các số đẹp tìm thấy:", ket_qua)
           awardXp('ide_run_debug', activeFile.id);
         }
       } else if (pyRes.status === 'timeout') {
-        setTerminalOutput((prev) => prev + `\n❌ [TIMEOUT]: Quá thời gian thực thi.\n`);
+        setTerminalOutput('');
         setErrorMessage(pyRes.error?.message || 'Timeout Error: Vòng lặp vô hạn hoặc tính toán quá lâu.');
         setDebuggerMode('error');
       } else {
         const errText = pyRes.error?.message || 'Không thể thực thi mã Python.';
-        setTerminalOutput(`❌ ${errText}`);
+        setTerminalOutput('');
         setErrorMessage(errText);
         setDebuggerMode('error');
       }
     } catch (err: any) {
       const msg = err?.message || 'Không thể kết nối tới trình chạy Python.';
-      setTerminalOutput(`❌ ${msg}`);
+      setTerminalOutput('');
       setErrorMessage(msg);
       setDebuggerMode('error');
     }
@@ -399,7 +401,7 @@ print("Các số đẹp tìm thấy:", ket_qua)
         setTerminalOutput(apiData.steps[0].stdout || '');
 
         if (apiData.runtimeError) {
-          setErrorMessage(apiData.runtimeError);
+          setErrorMessage(translatePythonError(apiData.runtimeError).message);
         }
 
         if (user) {
@@ -408,7 +410,7 @@ print("Các số đẹp tìm thấy:", ket_qua)
       } else {
         setTerminalOutput(apiData.finalOutput || '');
         if (apiData.runtimeError) {
-          setErrorMessage(apiData.runtimeError);
+          setErrorMessage(translatePythonError(apiData.runtimeError).message);
         }
         setDebuggerMode('finished');
       }
